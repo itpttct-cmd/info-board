@@ -10,12 +10,14 @@ const nextConfig = {
   images: { 
     unoptimized: true 
   },
+  // Transpile paket undici agar sintaks modern JavaScript dipahami Webpack
+  transpilePackages: ['@vercel/blob', 'undici'],
+  
   experimental: {
-    // Di Next.js 14+, limit body size server actions ditulis seperti ini jika menggunakan Server Actions:
     serverActions: true,
+    // Untuk Next.js 13/14 awal, properti ini WAJIB berada di dalam objek experimental
+    serverComponentsExternalPackages: ['@vercel/blob', 'undici'],
   },
-  // 🛑 Tambahkan package ini agar Webpack tidak crash saat me-build @vercel/blob & undici
-  serverExternalPackages: ['@vercel/blob', 'undici'],
 };
 
 module.exports = nextConfig;
