@@ -4,7 +4,8 @@ const connectionString =
   process.env.DATABASE_URL ||
   'postgresql://postgres:postgres@localhost:5432/infoboard';
 
-const isProduction = process.env.NODE_ENV === 'production';
+// Cek apakah koneksi menggunakan database lokal (localhost) atau remote (Supabase/Vercel)
+const isLocalhost = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
 
 const globalForPg = globalThis as unknown as { __pgPool?: Pool };
 
@@ -13,7 +14,8 @@ if (!globalForPg.__pgPool) {
     connectionString,
     max: 10,
     idleTimeoutMillis: 30000,
-    ssl: isProduction && process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : undefined,
+    // Jika BUKAN localhost, selalu aktifkan SSL dengan rejectUnauthorized: false
+    ssl: !isLocalhost ? { rejectUnauthorized: false } : undefined,
   });
 }
 
