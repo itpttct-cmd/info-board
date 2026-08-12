@@ -132,7 +132,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
+          {/* <p className="mt-6 text-center text-sm text-muted-foreground">
             Don't have an account?{' '}
             <button
               onClick={() => router.push('/register')}
@@ -140,7 +140,7 @@ export default function LoginPage() {
             >
               Register here
             </button>
-          </p>
+          </p> */}
         </div>
       </div>
     </div>
