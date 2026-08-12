@@ -117,8 +117,14 @@ export async function getAuthUserFromRequest(request: Request): Promise<AuthUser
   let token = cookieStore.get(COOKIE_NAME)?.value;
 
   // 2. Cadangan: Jika cookie kosong, baru ambil dari Header Authorization
+  // if (!token) {
+  //   token = await getTokenFromRequest(request);
+  // }
+
+  // ✅ KODE BARU (Aman dari TypeScript Error):
   if (!token) {
-    token = await getTokenFromRequest(request);
+    const rawToken = await getTokenFromRequest(request);
+    token = rawToken ?? undefined;
   }
 
   // Jika di kedua tempat tetap tidak ada token, batalkan akses
