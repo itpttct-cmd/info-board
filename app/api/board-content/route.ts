@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
     // 1. Upload file ke Vercel Blob menggantikan fs.writeFile
     const blob = await put(`uploads/${Date.now()}-${file.name}`, file, {
-      access: 'public',
+      access: 'private',
     });
 
     // URL HTTPS publik langsung dari Vercel Blob Storage
