@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { getAuthUserFromRequest } from '@/lib/auth';
-import { writeFile, mkdir, unlink } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
+import { put, del } from '@vercel/blob';
 
 export const dynamic = 'force-dynamic';
-
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
+export const maxDuration = 60;
 
 function detectType(file: File): 'image' | 'excel' | null {
   if (file.type.startsWith('image/')) return 'image';
@@ -66,15 +63,14 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      if (!existsSync(UPLOAD_DIR)) {
-        await mkdir(UPLOAD_DIR, { recursive: true });
-      }
-      const ext = file.name.split('.').pop();
-      const savedName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const filePath = path.join(UPLOAD_DIR, savedName);
-      const bytes = await file.arrayBuffer();
-      await writeFile(filePath, Buffer.from(bytes));
-      fileUrl = `/uploads/${savedName}`;
+      
+      // 🚀 UPLOAD FILE KE PUBLIC VERCEL BLOB
+      const blob = await put(`sidebar/${Date.now()}-${file.name}`, file, {
+        access: 'public',
+        token: process.env.PUBLIC_BLOB_READ_WRITE_TOKEN,
+      });
+
+      fileUrl = blob.url;
       fileName = file.name;
       dbContentType = type;
     } else {
@@ -90,8 +86,9 @@ export async function POST(request: Request) {
     );
 
     return NextResponse.json(row);
-  } catch {
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+  } catch (err: any) {
+    console.error('SIDEBAR UPLOAD ERROR:', err);
+    return NextResponse.json({ error: err?.message || 'Upload failed' }, { status: 500 });
   }
 }
 
@@ -149,12 +146,14 @@ export async function DELETE(request: Request) {
 
     await query('DELETE FROM sidebar_content WHERE id = $1', [id]);
 
-    if (row?.file_url?.startsWith('/uploads/')) {
-      const filePath = path.join(process.cwd(), 'public', row.file_url);
+    // 🚀 HAPUS FILE DARI VERCEL BLOB JIKA ADA
+    if (row?.file_url?.includes('vercel-storage.com')) {
       try {
-        await unlink(filePath);
+        await del(row.file_url, {
+          token: process.env.PUBLIC_BLOB_READ_WRITE_TOKEN,
+        });
       } catch {
-        // best-effort
+        // best-effort delete
       }
     }
 
