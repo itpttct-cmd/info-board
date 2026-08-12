@@ -14,8 +14,8 @@ const nextConfig = {
     // Di Next.js 14+, limit body size server actions ditulis seperti ini jika menggunakan Server Actions:
     serverActions: true,
   },
-  // Opsi ukuran limit upload (jika dibutuhkan)
-  serverExternalPackages: [],
+  // 🛑 Tambahkan package ini agar Webpack tidak crash saat me-build @vercel/blob & undici
+  serverExternalPackages: ['@vercel/blob', 'undici'],
 };
 
 module.exports = nextConfig;
