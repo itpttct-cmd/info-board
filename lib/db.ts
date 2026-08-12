@@ -4,6 +4,11 @@ const rawConnectionString =
   process.env.DATABASE_URL ||
   'postgresql://postgres:postgres@localhost:5432/infoboard';
 
+// Cek apakah koneksi diarahkan ke database lokal (pgAdmin) atau Supabase/Cloud
+const isLocalhost =
+  rawConnectionString.includes('localhost') ||
+  rawConnectionString.includes('127.0.0.1');
+
 const globalForPg = globalThis as unknown as { __pgPool?: Pool };
 
 if (!globalForPg.__pgPool) {
@@ -11,10 +16,9 @@ if (!globalForPg.__pgPool) {
     connectionString: rawConnectionString,
     max: 10,
     idleTimeoutMillis: 30000,
-    // 🛑 PAKSA DISABLE PENGECEKAN SERTIFIKAT SSL KARENA SUPABASE/NODE_MODULES
-    ssl: {
-      rejectUnauthorized: false,
-    },
+    // Jika BUKAN localhost (yaitu Supabase), aktifkan SSL. 
+    // Jika localhost (pgAdmin lokal), matikan SSL.
+    ssl: !isLocalhost ? { rejectUnauthorized: false } : false,
   });
 }
 

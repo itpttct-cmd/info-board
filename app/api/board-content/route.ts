@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { getAuthUserFromRequest } from '@/lib/auth';
-import { writeFile, mkdir, unlink } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
+import { put, del } from '@vercel/blob';
 
 export const dynamic = 'force-dynamic';
 // Memperpanjang batas waktu eksekusi request upload file
 export const maxDuration = 60; 
-
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
 
 function detectType(file: File): 'image' | 'excel' | 'pdf' | null {
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
@@ -62,21 +58,15 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!existsSync(UPLOAD_DIR)) {
-      await mkdir(UPLOAD_DIR, { recursive: true });
-    }
+    // 1. Upload file ke Vercel Blob menggantikan fs.writeFile
+    const blob = await put(`uploads/${Date.now()}-${file.name}`, file, {
+      access: 'public',
+    });
 
-    const ext = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const filePath = path.join(UPLOAD_DIR, fileName);
+    // URL HTTPS publik langsung dari Vercel Blob Storage
+    const fileUrl = blob.url;
 
-    // FIX: Cara aman konversi ArrayBuffer ke Buffer di Node.js
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
-
-    const fileUrl = `/uploads/${fileName}`;
-
+    // 2. Simpan URL ke Database Postgres (Lokal maupun Supabase)
     const row = await queryOne(
       `INSERT INTO board_content (section, slot_key, title, content_type, file_url, file_name, is_active, sort_order)
        VALUES (null, null, $1, $2, $3, $4, true, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM board_content))
@@ -86,7 +76,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json(row);
   } catch (err: any) {
-    // KITA PRINT ERROR KE TERMINAL SUPAYA BISA DILIHAT
     console.error('CRITICAL UPLOAD ERROR:', err);
 
     return NextResponse.json(
@@ -140,10 +129,10 @@ export async function DELETE(request: Request) {
 
     await query('DELETE FROM board_content WHERE id = $1', [id]);
 
-    if (row?.file_url?.startsWith('/uploads/')) {
-      const filePath = path.join(process.cwd(), 'public', row.file_url);
+    // Hapus file dari Vercel Blob jika merupakan URL Blob
+    if (row?.file_url?.includes('vercel-storage.com')) {
       try {
-        await unlink(filePath);
+        await del(row.file_url);
       } catch {
         // best-effort
       }
