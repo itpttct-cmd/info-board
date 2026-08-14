@@ -8,28 +8,74 @@ import { SidebarPanel } from '@/components/display/sidebar-panel';
 import type { BoardContent, RunningText, SidebarContent, SidebarPosition } from '@/lib/types';
 
 interface TvBoardDisplayProps {
-  boardContent: BoardContent[];
-  sidebarContent: SidebarContent[];
-  runningTexts: RunningText[];
-  currentIndex?: number; // dibuat opsional
+  initialBoard?: BoardContent[];
+  initialSidebar?: SidebarContent[];
+  initialTexts?: RunningText[];
 }
 
 export function TvBoardDisplay({
-  boardContent = [],
-  sidebarContent = [],
-  runningTexts = [],
-  currentIndex: initialIndex = 0,
+  initialBoard = [],
+  initialSidebar = [],
+  initialTexts = [],
 }: TvBoardDisplayProps) {
-  // 💡 1. Pindahkan index ke State Client agar bisa berubah tanpa reload
-  const [activeSlideIndex, setActiveSlideIndex] = useState(initialIndex);
+  const [boardContent, setBoardContent] = useState<BoardContent[]>(initialBoard);
+  const [sidebarContent, setSidebarContent] = useState<SidebarContent[]>(initialSidebar);
+  const [runningTexts, setRunningTexts] = useState<RunningText[]>(initialTexts);
+  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+  const [loading, setLoading] = useState(initialBoard.length === 0);
 
-  // ⏱️ 2. Timer Auto Slide Khusus Board Content Utama (tiap 15 detik)
+  // 1. Fetch data langsung di Client Browser TV
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // Panggil relative URL agar aman dari masalah domain / SSL CORS di Tizen
+        const [boardRes, sidebarRes, textsRes] = await Promise.all([
+          fetch('/api/board-content', { cache: 'no-store' }),
+          fetch('/api/sidebar-content', { cache: 'no-store' }),
+          fetch('/api/running-text', { cache: 'no-store' }),
+        ]);
+
+        if (boardRes.ok) {
+          const boardData = await boardRes.json();
+          if (Array.isArray(boardData) && boardData.length > 0) {
+            setBoardContent(boardData);
+          }
+        }
+
+        if (sidebarRes.ok) {
+          const sidebarData = await sidebarRes.json();
+          if (Array.isArray(sidebarData) && sidebarData.length > 0) {
+            setSidebarContent(sidebarData);
+          }
+        }
+
+        if (textsRes.ok) {
+          const textsData = await textsRes.json();
+          if (Array.isArray(textsData) && textsData.length > 0) {
+            setRunningTexts(textsData);
+          }
+        }
+      } catch (error) {
+        console.error('Client fetch error on TV:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+
+    // Auto-refresh data dari server setiap 5 menit agar TV selalu dapat update terbaru tanpa reload
+    const dataInterval = setInterval(fetchData, 300000);
+    return () => clearInterval(dataInterval);
+  }, []);
+
+  // 2. Timer Auto-Slide khusus Board Content (setiap 15 detik)
   useEffect(() => {
     if (!boardContent || boardContent.length <= 1) return;
 
     const timer = setInterval(() => {
       setActiveSlideIndex((prev) => (prev + 1) % boardContent.length);
-    }, 15000); // 15000ms = 15 detik
+    }, 15000);
 
     return () => clearInterval(timer);
   }, [boardContent.length]);
@@ -37,10 +83,8 @@ export function TvBoardDisplay({
   const getItems = (pos: SidebarPosition) =>
     sidebarContent.filter((c) => c.position === pos);
 
-  // Ambil slide aktif saat ini
   const current = boardContent[activeSlideIndex] || boardContent[0];
 
-  // Format running text string untuk marquee
   const runningTextString =
     runningTexts.map((t) => t.text).join('   —   ') ||
     'WELCOME TO PT TRI CIPTA TEKNINDO';
@@ -49,7 +93,7 @@ export function TvBoardDisplay({
     <div className="dark grid-bg flex min-h-screen w-full flex-col overflow-hidden bg-[#020817]">
       <DisplayHeader />
 
-      {/* Main content area (Layout Kiri - Tengah - Kanan) */}
+      {/* Main content area */}
       <main className="flex flex-1 flex-col gap-3 p-3 lg:flex-row lg:overflow-hidden">
         {/* Left sidebar */}
         <aside className="order-2 flex w-full flex-col gap-3 lg:order-1 lg:w-[240px] lg:shrink-0">
@@ -57,9 +101,13 @@ export function TvBoardDisplay({
           <SidebarPanel items={getItems('left_bottom')} />
         </aside>
 
-        {/* Center: Board Display (SLIDE BERGANTI OTOMATIS) */}
+        {/* Center: Board Display */}
         <div className="flex flex-1 flex-col lg:order-2 lg:overflow-hidden">
-          {boardContent.length === 0 ? (
+          {loading && boardContent.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card/50 backdrop-blur text-muted-foreground">
+              <p className="text-sm font-bold animate-pulse">Memuat Data Infoboard...</p>
+            </div>
+          ) : boardContent.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card/50 backdrop-blur text-muted-foreground/60">
               <p className="text-sm">No content available</p>
               <p className="text-xs">Upload files via admin dashboard</p>
@@ -74,7 +122,6 @@ export function TvBoardDisplay({
 
                 {boardContent.length > 1 && (
                   <div className="flex items-center gap-2">
-                    {/* Tombol Manual Navigasi Slide */}
                     <button
                       type="button"
                       onClick={() =>
@@ -86,7 +133,7 @@ export function TvBoardDisplay({
                     >
                       &lt;
                     </button>
-                    
+
                     <span className="text-[10px] font-medium text-muted-foreground">
                       {activeSlideIndex + 1}/{boardContent.length}
                     </span>
@@ -121,7 +168,7 @@ export function TvBoardDisplay({
         </aside>
       </main>
 
-      {/* Footer Running Text Native Marquee untuk Tizen TV 2014 */}
+      {/* Footer Running Text Native Marquee */}
       <div className="w-full bg-card border-t border-border p-2">
         {/* @ts-ignore */}
         <marquee
