@@ -30,7 +30,7 @@ export function TvBoardDisplay({
     'WELCOME TO PT TRI CIPTA TEKNINDO';
 
   return (
-    <div className="grid-bg flex min-h-screen w-full flex-col overflow-hidden bg-background">
+    <div className="dark grid-bg flex min-h-screen w-full flex-col overflow-hidden bg-[#020817]">
       <DisplayHeader />
 
       {/* Main content area (Persis dengan layout app/page.tsx) */}

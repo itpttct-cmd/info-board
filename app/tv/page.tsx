@@ -1,67 +1,36 @@
 // app/tv/page.tsx
 import { TvBoardDisplay } from '@/components/display/tv-board-display';
-// Contoh jika kamu pakai Prisma atau Supabase Client langsung:
-// import { prisma } from '@/lib/prisma'; 
-// atau import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
-// 🛑 Mencegah Vercel melakukan build-time prerender
 export const dynamic = 'force-dynamic';
-
-// Fungsi panggil data langsung dari Database (Bukan via HTTP fetch)
-async function getData() {
-  try {
-    /* 
-      JIKA MENGGUNAKAN PRISMA:
-      const [boardContent, sidebarContent, runningTexts] = await Promise.all([
-        prisma.boardContent.findMany(),
-        prisma.sidebarContent.findMany(),
-        prisma.runningText.findMany(),
-      ]);
-      return { boardContent, sidebarContent, runningTexts };
-    */
-
-    /* 
-      JIKA MENGGUNAKAN SUPABASE CLIENT:
-      const [boardRes, sidebarRes, textsRes] = await Promise.all([
-        supabase.from('board_content').select('*'),
-        supabase.from('sidebar_content').select('*'),
-        supabase.from('running_text').select('*'),
-      ]);
-      return {
-        boardContent: boardRes.data || [],
-        sidebarContent: sidebarRes.data || [],
-        runningTexts: textsRes.data || [],
-      };
-    */
-
-    // FALLBACK JIKA MASIH MAU PAKAI FETCH (Gunakan absolute URL aman untuk Vercel):
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
-
-    const [boardRes, sidebarRes, textsRes] = await Promise.all([
-      fetch(`${baseUrl}/api/board-content`, { cache: 'no-store' }),
-      fetch(`${baseUrl}/api/sidebar-content`, { cache: 'no-store' }),
-      fetch(`${baseUrl}/api/running-text`, { cache: 'no-store' }),
-    ]);
-
-    return {
-      boardContent: await boardRes.json(),
-      sidebarContent: await sidebarRes.json(),
-      runningTexts: await textsRes.json(),
-    };
-  } catch (e) {
-    console.error('Error fetching TV data:', e);
-    return { boardContent: [], sidebarContent: [], runningTexts: [] };
-  }
-}
 
 export default async function TvPage({
   searchParams,
 }: {
   searchParams: Promise<{ slide?: string }>;
 }) {
-  const { boardContent, sidebarContent, runningTexts } = await getData();
+  // 💡 Ambil dari env, jika undefined/kosong gunakan hardcode fallback Supabase kamu
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    'https://pexwvczfjxuvtofqlpcr.supabase.co';
+
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    'sb_publishable_48ZTp-nQwyNJiUGyp3qtLw_fonj7wBX';
+
+  // Inisialisasi tidak akan error lagi karena URL dijamin terisi
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // 🚀 Query data LANGSUNG ke Supabase
+  const [boardRes, sidebarRes, textsRes] = await Promise.all([
+    supabase.from('board_content').select('*').order('created_at', { ascending: false }),
+    supabase.from('sidebar_content').select('*').order('created_at', { ascending: false }),
+    supabase.from('running_text').select('*').order('created_at', { ascending: false }),
+  ]);
+
+  const boardContent = boardRes.data || [];
+  const sidebarContent = sidebarRes.data || [];
+  const runningTexts = textsRes.data || [];
 
   const resolvedParams = await searchParams;
   const currentIndex = Number(resolvedParams?.slide) || 0;
@@ -70,20 +39,21 @@ export default async function TvPage({
   const intervalSeconds = 15;
 
   return (
-    <>
+    <html lang="en" className="dark">
       <head>
         <meta
           httpEquiv="refresh"
           content={`${intervalSeconds};url=/tv?slide=${nextIndex}`}
         />
       </head>
-
-      <TvBoardDisplay
-        boardContent={boardContent}
-        sidebarContent={sidebarContent}
-        runningTexts={runningTexts}
-        currentIndex={currentIndex}
-      />
-    </>
+      <body className="bg-background text-foreground antialiased">
+        <TvBoardDisplay
+          boardContent={boardContent}
+          sidebarContent={sidebarContent}
+          runningTexts={runningTexts}
+          currentIndex={currentIndex}
+        />
+      </body>
+    </html>
   );
 }
