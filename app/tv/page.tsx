@@ -1,50 +1,89 @@
 // app/tv/page.tsx
-export const revalidate = 10; // Auto-refresh data tiap 10 detik di server
+import { TvBoardDisplay } from '@/components/display/tv-board-display';
+// Contoh jika kamu pakai Prisma atau Supabase Client langsung:
+// import { prisma } from '@/lib/prisma'; 
+// atau import { supabase } from '@/lib/supabase';
 
-async function getBoardData() {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const res = await fetch(`${baseUrl}/api/board-content`, { cache: 'no-store' });
-  if (!res.ok) return [];
-  return res.json();
+// 🛑 Mencegah Vercel melakukan build-time prerender
+export const dynamic = 'force-dynamic';
+
+// Fungsi panggil data langsung dari Database (Bukan via HTTP fetch)
+async function getData() {
+  try {
+    /* 
+      JIKA MENGGUNAKAN PRISMA:
+      const [boardContent, sidebarContent, runningTexts] = await Promise.all([
+        prisma.boardContent.findMany(),
+        prisma.sidebarContent.findMany(),
+        prisma.runningText.findMany(),
+      ]);
+      return { boardContent, sidebarContent, runningTexts };
+    */
+
+    /* 
+      JIKA MENGGUNAKAN SUPABASE CLIENT:
+      const [boardRes, sidebarRes, textsRes] = await Promise.all([
+        supabase.from('board_content').select('*'),
+        supabase.from('sidebar_content').select('*'),
+        supabase.from('running_text').select('*'),
+      ]);
+      return {
+        boardContent: boardRes.data || [],
+        sidebarContent: sidebarRes.data || [],
+        runningTexts: textsRes.data || [],
+      };
+    */
+
+    // FALLBACK JIKA MASIH MAU PAKAI FETCH (Gunakan absolute URL aman untuk Vercel):
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}` 
+      : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
+
+    const [boardRes, sidebarRes, textsRes] = await Promise.all([
+      fetch(`${baseUrl}/api/board-content`, { cache: 'no-store' }),
+      fetch(`${baseUrl}/api/sidebar-content`, { cache: 'no-store' }),
+      fetch(`${baseUrl}/api/running-text`, { cache: 'no-store' }),
+    ]);
+
+    return {
+      boardContent: await boardRes.json(),
+      sidebarContent: await sidebarRes.json(),
+      runningTexts: await textsRes.json(),
+    };
+  } catch (e) {
+    console.error('Error fetching TV data:', e);
+    return { boardContent: [], sidebarContent: [], runningTexts: [] };
+  }
 }
 
-export default async function TvDisplayPage() {
-  const data = await getBoardData();
+export default async function TvPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ slide?: string }>;
+}) {
+  const { boardContent, sidebarContent, runningTexts } = await getData();
+
+  const resolvedParams = await searchParams;
+  const currentIndex = Number(resolvedParams?.slide) || 0;
+  const totalSlides = boardContent.length || 1;
+  const nextIndex = (currentIndex + 1) % totalSlides;
+  const intervalSeconds = 15;
 
   return (
-    <html lang="id">
+    <>
       <head>
-        <title>Info Board PT Tri Cipta Teknindo - TV Samsung Tizen Browser Mode</title>
-        {/* Auto refresh halaman setiap 60 detik agar data selalu paling baru */}
-        <meta http-equiv="refresh" content="60" />
-        <style>{`
-          body { background-color: #0f172a; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
-          .container { display: flex; flex-direction: column; gap: 20px; }
-          .card { background: #1e293b; border-radius: 8px; padding: 15px; }
-          .title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
-          .media { max-width: 100%; height: auto; border-radius: 4px; }
-          /* Tag marquee murni native HTML, sangat lancar di Tizen 2014 */
-          marquee { font-size: 20px; color: #38bdf8; }
-        `}</style>
+        <meta
+          httpEquiv="refresh"
+          content={`${intervalSeconds};url=/tv?slide=${nextIndex}`}
+        />
       </head>
-      <body>
-        <div className="container">
-          <div className="card">
-            <marquee behavior="scroll" direction="left" scrollamount="3">
-              📢 WELCOME TO PT TRI CIPTA TEKNINDO - REAL-TIME DISPLAY SYSTEM
-            </marquee>
-          </div>
 
-          {data.map((item: any) => (
-            <div key={item.id} className="card">
-              <div className="title">{item.title}</div>
-              {item.file_url && (
-                <img src={item.file_url} alt={item.title} className="media" />
-              )}
-            </div>
-          ))}
-        </div>
-      </body>
-    </html>
+      <TvBoardDisplay
+        boardContent={boardContent}
+        sidebarContent={sidebarContent}
+        runningTexts={runningTexts}
+        currentIndex={currentIndex}
+      />
+    </>
   );
 }
