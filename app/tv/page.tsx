@@ -1,57 +1,40 @@
 // app/tv/page.tsx
 import { TvBoardDisplay } from '@/components/display/tv-board-display';
-import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-export default async function TvPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ slide?: string }>;
-}) {
-  // 💡 Ambil dari env, jika undefined/kosong gunakan hardcode fallback Supabase kamu
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    'https://pexwvczfjxuvtofqlpcr.supabase.co';
+async function getDisplayData() {
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : process.env.NEXT_PUBLIC_APP_URL || 'https://infoboard-tct.vercel.app';
 
-  const supabaseKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    'sb_publishable_48ZTp-nQwyNJiUGyp3qtLw_fonj7wBX';
+  try {
+    const [boardRes, sidebarRes, textsRes] = await Promise.all([
+      fetch(`${baseUrl}/api/board-content`, { cache: 'no-store' }),
+      fetch(`${baseUrl}/api/sidebar-content`, { cache: 'no-store' }),
+      fetch(`${baseUrl}/api/running-text`, { cache: 'no-store' }),
+    ]);
 
-  // Inisialisasi tidak akan error lagi karena URL dijamin terisi
-  const supabase = createClient(supabaseUrl, supabaseKey);
+    return {
+      boardContent: boardRes.ok ? await boardRes.json() : [],
+      sidebarContent: sidebarRes.ok ? await sidebarRes.json() : [],
+      runningTexts: textsRes.ok ? await textsRes.json() : [],
+    };
+  } catch (error) {
+    return { boardContent: [], sidebarContent: [], runningTexts: [] };
+  }
+}
 
-  // 🚀 Query data LANGSUNG ke Supabase
-  const [boardRes, sidebarRes, textsRes] = await Promise.all([
-    supabase.from('board_content').select('*').order('created_at', { ascending: false }),
-    supabase.from('sidebar_content').select('*').order('created_at', { ascending: false }),
-    supabase.from('running_text').select('*').order('created_at', { ascending: false }),
-  ]);
-
-  const boardContent = boardRes.data || [];
-  const sidebarContent = sidebarRes.data || [];
-  const runningTexts = textsRes.data || [];
-
-  const resolvedParams = await searchParams;
-  const currentIndex = Number(resolvedParams?.slide) || 0;
-  const totalSlides = boardContent.length || 1;
-  const nextIndex = (currentIndex + 1) % totalSlides;
-  const intervalSeconds = 15;
+export default async function TvPage() {
+  const { boardContent, sidebarContent, runningTexts } = await getDisplayData();
 
   return (
     <html lang="en" className="dark">
-      <head>
-        <meta
-          httpEquiv="refresh"
-          content={`${intervalSeconds};url=/tv?slide=${nextIndex}`}
-        />
-      </head>
-      <body className="bg-background text-foreground antialiased">
+      <body className="bg-background text-foreground antialiased overflow-hidden">
         <TvBoardDisplay
           boardContent={boardContent}
           sidebarContent={sidebarContent}
           runningTexts={runningTexts}
-          currentIndex={currentIndex}
         />
       </body>
     </html>
